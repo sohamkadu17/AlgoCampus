@@ -1,0 +1,61 @@
+# FastAPI Backend Requirements
+
+# Core Framework
+fastapi==0.110.0
+uvicorn[standard]==0.27.1
+pydantic==2.6.1
+pydantic-settings==2.1.0
+
+# Database
+sqlalchemy==2.0.27
+alembic==1.13.1
+psycopg2-binary==2.9.9  # PostgreSQL
+aiosqlite==0.19.0  # SQLite async
+
+# Algorand SDK
+py-algorand-sdk==2.6.0
+
+# Authentication & Security
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.9
+pynacl==1.5.0  # For Ed25519 signature verification
+
+# Caching & Session
+redis==5.0.1
+aioredis==2.0.1
+
+# HTTP & WebSocket
+httpx==0.26.0
+websockets==12.0
+python-socketio==5.11.1
+
+# Background Tasks
+celery==5.3.6
+celery[redis]==5.3.6
+
+# Utilities
+python-dotenv==1.0.1
+pydantic-settings==2.1.0
+
+# Rate Limiting
+slowapi==0.1.9
+
+# Validation
+email-validator==2.1.0.post1
+
+# Logging & Monitoring
+structlog==24.1.0
+python-json-logger==2.0.7
+
+# Testing
+pytest==8.0.0
+pytest-asyncio==0.23.4
+pytest-cov==4.1.0
+httpx==0.26.0  # For testing
+faker==22.7.0
+
+# Development
+black==24.1.1
+ruff==0.2.1
+mypy==1.8.0

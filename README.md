@@ -25,7 +25,7 @@ Prerequisites:
 Clone or fork the base template:
 
 ```bash
-git clone https://github.com/marotipatre/Hackseries-2-QuickStart-template.git
+git clone https://github.com/sohamkadu17/AlgoCampus
 cd Hackseries-2-QuickStart-template
 ```
 

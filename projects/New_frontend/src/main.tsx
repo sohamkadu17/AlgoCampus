@@ -10,7 +10,7 @@
     <ErrorBoundary>
       <WalletContextProvider>
         <AppContextProvider>
-          <App />
+          <App/>
         </AppContextProvider>
       </WalletContextProvider>
     </ErrorBoundary>

@@ -17,6 +17,8 @@ export default defineConfig({
         global: true,
         process: true,
       },
+      // Explicitly include buffer module for algosdk compatibility
+      include: ['buffer', 'process', 'util', 'stream', 'events'],
     }),
   ],
   resolve: {
@@ -25,8 +27,12 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
-  define: {
-    'global': 'globalThis',
+  server: {
+    hmr: {
+      // Fix WebSocket HMR connection issues
+      protocol: 'ws',
+      host: 'localhost',
+    },
   },
 
   // File types to support raw imports. Never add .css, .tsx, or .ts files to this.

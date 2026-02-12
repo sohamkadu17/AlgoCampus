@@ -90,6 +90,24 @@ export const authService = {
   },
 
   /**
+   * Demo authentication - get real JWT tokens without signature verification
+   */
+  async demoAuth(walletAddress: string) {
+    const response = await apiClient.post<TokenResponse>(
+      API_ENDPOINTS.AUTH.DEMO,
+      { wallet_address: walletAddress },
+      { requiresAuth: false }
+    );
+
+    if (response.data) {
+      apiClient.setAccessToken(response.data.access_token);
+      apiClient.setRefreshToken(response.data.refresh_token);
+    }
+
+    return response;
+  },
+
+  /**
    * Logout and clear tokens
    */
   logout() {

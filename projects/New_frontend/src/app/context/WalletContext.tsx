@@ -5,6 +5,7 @@
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { PeraWalletConnect } from '@perawallet/connect';
+import { Buffer } from 'buffer';
 import { STORAGE_KEYS } from '../config/api.config';
 import { authService } from '../services/auth.service';
 import { toast } from 'sonner';
@@ -120,15 +121,19 @@ export function WalletContextProvider({ children }: WalletContextProviderProps) 
           const algosdk = await import('algosdk');
           const suggestedParams = {
             fee: 1000,
+            minFee: 1000,
+            firstValid: 1000,
+            lastValid: 2000,
             firstRound: 1000,
             lastRound: 2000,
             genesisID: 'testnet-v1.0',
-            genesisHash: 'SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI=',
-          };
+            genesisHash: new Uint8Array(Buffer.from('SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI=', 'base64')),
+            flatFee: true,
+          } as any;
 
           const txn = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
-            from: address,
-            to: address,
+            sender: address,
+            receiver: address,
             amount: 0,
             note: messageBytes,
             suggestedParams,
@@ -150,12 +155,20 @@ export function WalletContextProvider({ children }: WalletContextProviderProps) 
           }
         }
       } catch (authError) {
-        console.warn('Authentication skipped:', authError);
-        // Still show as connected even if auth fails
-        toast.success('Pera Wallet connected! (Auth in demo mode)');
-        // Store a demo token for UI purposes
-        localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, 'demo_pera_token');
-        setIsAuthenticated(true);
+        console.warn('Signature auth failed, trying demo auth:', authError);
+        // Use the backend's demo auth endpoint to get real JWT tokens
+        try {
+          const demoResponse = await authService.demoAuth(address);
+          if (demoResponse.data) {
+            setIsAuthenticated(true);
+            toast.success('Pera Wallet connected! (Auth in demo mode)');
+          } else {
+            throw new Error('Demo auth failed');
+          }
+        } catch (demoError) {
+          console.error('Demo auth also failed:', demoError);
+          toast.error('Authentication failed - is the backend running?');
+        }
       }
 
     } catch (error: any) {
@@ -194,15 +207,19 @@ export function WalletContextProvider({ children }: WalletContextProviderProps) 
       const algosdk = await import('algosdk');
       const suggestedParams = {
         fee: 1000,
+        minFee: 1000,
+        firstValid: 1000,
+        lastValid: 2000,
         firstRound: 1000,
         lastRound: 2000,
         genesisID: 'testnet-v1.0',
-        genesisHash: 'SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI=',
-      };
+        genesisHash: new Uint8Array(Buffer.from('SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI=', 'base64')),
+        flatFee: true,
+      } as any;
 
       const txn = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
-        from: walletAddress,
-        to: walletAddress,
+        sender: walletAddress,
+        receiver: walletAddress,
         amount: 0,
         note: message,
         suggestedParams,

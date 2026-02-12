@@ -39,11 +39,11 @@ export const groupsService = {
   /**
    * Create a new group
    */
-  async createGroup(groupData: GroupCreate, privateKey: string) {
+  async createGroup(groupData: GroupCreate, privateKey?: string) {
     return apiClient.post<Group>(
       API_ENDPOINTS.GROUPS.CREATE,
       groupData,
-      { privateKey }
+      privateKey ? { privateKey } : {}
     );
   },
 
@@ -57,32 +57,32 @@ export const groupsService = {
   /**
    * Join a group via QR invite
    */
-  async joinGroup(inviteHash: string, privateKey: string) {
+  async joinGroup(inviteHash: string, privateKey?: string) {
     return apiClient.post<Group>(
       API_ENDPOINTS.GROUPS.JOIN,
       { invite_hash: inviteHash },
-      { privateKey }
+      privateKey ? { privateKey } : {}
     );
   },
 
   /**
    * Add member to group (admin only)
    */
-  async addMember(groupId: number, memberAddress: string, privateKey: string) {
+  async addMember(groupId: number, memberAddress: string, privateKey?: string) {
     return apiClient.post(
       API_ENDPOINTS.GROUPS.MEMBERS(groupId),
       { wallet_address: memberAddress },
-      { privateKey }
+      privateKey ? { privateKey } : {}
     );
   },
 
   /**
    * Remove member from group (admin only)
    */
-  async removeMember(groupId: number, memberAddress: string, privateKey: string) {
+  async removeMember(groupId: number, memberAddress: string, privateKey?: string) {
     return apiClient.delete(
       `${API_ENDPOINTS.GROUPS.MEMBERS(groupId)}/${memberAddress}`,
-      { privateKey }
+      privateKey ? { privateKey } : {}
     );
   },
 };

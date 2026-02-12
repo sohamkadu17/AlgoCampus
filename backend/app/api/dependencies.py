@@ -55,39 +55,27 @@ async def get_current_user_address(
 
 
 async def get_private_key_from_header(
-    x_private_key: str = Header(..., description="User's private key for signing transactions")
-) -> str:
+    x_private_key: str = Header(None, description="User's private key for signing transactions (optional for demo)")
+) -> str | None:
     """
     Extract private key from request header.
     
     SECURITY NOTE: This is for hackathon/development only.
-    In production, use a secure key management solution or wallet connect.
+    In production, use Pera Wallet signing or WalletConnect.
     
-    The private key should be sent in the X-Private-Key header.
-    
-    Use in endpoints that require transaction signing:
-    ```python
-    private_key: str = Depends(get_private_key_from_header)
-    ```
+    When using Pera Wallet, private keys are never exposed.
+    The backend will skip on-chain signing if no key is provided
+    but still record the operation in the database.
     
     Returns:
-        Private key string
-        
-    Raises:
-        HTTPException: If header is missing
+        Private key string or None if not provided
     """
     if not x_private_key:
-        raise HTTPException(
-            status_code=400,
-            detail="X-Private-Key header is required for transaction signing"
-        )
+        return None
     
     # Basic validation (25-word mnemonic or base64 key)
     if len(x_private_key) < 20:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid private key format"
-        )
+        return None
     
     return x_private_key
 

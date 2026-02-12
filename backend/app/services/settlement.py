@@ -33,7 +33,7 @@ class SettlementService:
     async def initiate_settlement(
         self,
         debtor_address: str,
-        debtor_private_key: str,
+        debtor_private_key: Optional[str],
         creditor_address: str,
         amount: int,
         note: str = "",
@@ -82,48 +82,64 @@ class SettlementService:
                 if group:
                     chain_group_id = group.chain_group_id
             
-            # Initiate settlement on-chain
-            logger.info(
-                f"Initiating settlement: debtor={debtor_address}, "
-                f"creditor={creditor_address}, amount={amount}"
-            )
+            # Initiate settlement on-chain (only if private key provided)
+            chain_settlement_id = 0
+            tx_id = None
+            confirmed_round = None
             
-            tx_result = await self.algo_service.initiate_settlement(
-                debtor_address=debtor_address,
-                debtor_private_key=debtor_private_key,
-                expense_id=chain_expense_id,
-                group_id=chain_group_id,
-                creditor_address=creditor_address,
-                amount=amount,
-                note=note
-            )
+            if debtor_private_key:
+                logger.info(
+                    f"Initiating settlement on-chain: debtor={debtor_address}, "
+                    f"creditor={creditor_address}, amount={amount}"
+                )
+                
+                tx_result = await self.algo_service.initiate_settlement(
+                    debtor_address=debtor_address,
+                    debtor_private_key=debtor_private_key,
+                    expense_id=chain_expense_id,
+                    group_id=chain_group_id,
+                    creditor_address=creditor_address,
+                    amount=amount,
+                    note=note
+                )
+                
+                # Extract settlement_id from logs
+                chain_settlement_id = tx_result.decode_log(0)
+                tx_id = tx_result.tx_id
+                confirmed_round = tx_result.confirmed_round
+                
+                if not chain_settlement_id:
+                    raise SmartContractError("Failed to extract settlement_id from transaction")
+                
+                logger.info(
+                    f"Settlement initiated on-chain: settlement_id={chain_settlement_id}, "
+                    f"tx_id={tx_result.tx_id}"
+                )
+            else:
+                logger.info(
+                    f"Initiating settlement off-chain (no private key): "
+                    f"debtor={debtor_address}, creditor={creditor_address}, amount={amount}"
+                )
             
-            # Extract settlement_id from logs
-            chain_settlement_id = tx_result.decode_log(0)
-            if not chain_settlement_id:
-                raise SmartContractError("Failed to extract settlement_id from transaction")
-            
-            logger.info(
-                f"Settlement initiated on-chain: settlement_id={chain_settlement_id}, "
-                f"tx_id={tx_result.tx_id}"
-            )
-            
-            # Create transaction record
-            transaction = Transaction(
-                transaction_id=tx_result.tx_id,
-                block_number=tx_result.confirmed_round,
-                transaction_type="initiate_settlement",
-                metadata={
-                    "settlement_id": chain_settlement_id,
-                    "debtor": debtor_address,
-                    "creditor": creditor_address,
-                    "amount": amount,
-                    "expense_id": chain_expense_id,
-                    "group_id": chain_group_id
-                }
-            )
-            self.db.add(transaction)
-            await self.db.flush()
+            # Create transaction record (if on-chain)
+            transaction_record_id = None
+            if tx_id:
+                transaction = Transaction(
+                    transaction_id=tx_id,
+                    block_number=confirmed_round,
+                    transaction_type="initiate_settlement",
+                    metadata={
+                        "settlement_id": chain_settlement_id,
+                        "debtor": debtor_address,
+                        "creditor": creditor_address,
+                        "amount": amount,
+                        "expense_id": chain_expense_id,
+                        "group_id": chain_group_id
+                    }
+                )
+                self.db.add(transaction)
+                await self.db.flush()
+                transaction_record_id = transaction.id
             
             # Create settlement record
             settlement = Settlement(
@@ -133,7 +149,7 @@ class SettlementService:
                 amount=amount,
                 status="pending",
                 group_id=group_id,
-                transaction_id=transaction.id
+                transaction_id=transaction_record_id
             )
             self.db.add(settlement)
             
@@ -156,7 +172,7 @@ class SettlementService:
         self,
         settlement_id: int,
         debtor_address: str,
-        debtor_private_key: str
+        debtor_private_key: Optional[str]
     ) -> Settlement:
         """
         Execute a settlement via atomic transaction group [Payment, AppCall].

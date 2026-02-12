@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Toaster, toast } from "sonner";
 import { Layout } from "./components/Layout";
 import { Landing } from "./components/Landing";
@@ -12,6 +12,177 @@ import { DashboardSkeleton } from "./components/Skeleton";
 import { WalletConnectionPulse } from "./components/WalletConnectionPulse";
 import { ThemeProvider } from "next-themes";
 import { useWalletContext } from "./context/WalletContext";
+import { ALGORAND_CONFIG } from "./config/api.config";
+
+/**
+ * SendAlgoPage - Real ALGO payment via Pera Wallet
+ */
+function SendAlgoPage({ walletAddress }: { walletAddress: string | null }) {
+  const [amount, setAmount] = useState("");
+  const [receiver, setReceiver] = useState("");
+  const [isSending, setIsSending] = useState(false);
+  const [balance, setBalance] = useState<number | null>(null);
+  const [txId, setTxId] = useState<string | null>(null);
+
+  // Fetch real balance on mount
+  useEffect(() => {
+    if (!walletAddress) return;
+    const fetchBalance = async () => {
+      try {
+        const response = await fetch(
+          `${ALGORAND_CONFIG.ALGOD_SERVER}/v2/accounts/${walletAddress}`
+        );
+        const data = await response.json();
+        setBalance(data.amount / 1_000_000); // microAlgos -> Algos
+      } catch (err) {
+        console.error("Failed to fetch balance:", err);
+      }
+    };
+    fetchBalance();
+  }, [walletAddress, txId]);
+
+  const handleSend = async () => {
+    if (!walletAddress) {
+      toast.error("Please connect your wallet first");
+      return;
+    }
+    if (!receiver || receiver.length !== 58) {
+      toast.error("Please enter a valid Algorand address (58 characters)");
+      return;
+    }
+    const amountNum = parseFloat(amount);
+    if (!amountNum || amountNum <= 0) {
+      toast.error("Please enter a valid amount");
+      return;
+    }
+    if (balance !== null && amountNum > balance - 0.1) {
+      toast.error("Insufficient balance (need to keep 0.1 ALGO minimum)");
+      return;
+    }
+
+    setIsSending(true);
+    try {
+      const algosdk = await import("algosdk");
+      const { PeraWalletConnect } = await import("@perawallet/connect");
+
+      // Create Algod client
+      const algodClient = new algosdk.Algodv2(
+        ALGORAND_CONFIG.ALGOD_TOKEN || "",
+        ALGORAND_CONFIG.ALGOD_SERVER,
+        ALGORAND_CONFIG.ALGOD_PORT || ""
+      );
+
+      // Get suggested params from the network
+      const suggestedParams = await algodClient.getTransactionParams().do();
+
+      // Build payment transaction
+      const microAlgos = Math.floor(amountNum * 1_000_000);
+      const txn = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
+        sender: walletAddress,
+        receiver: receiver,
+        amount: microAlgos,
+        suggestedParams,
+      });
+
+      // Sign with Pera Wallet
+      const peraWallet = new PeraWalletConnect({ shouldShowSignTxnToast: true });
+      await peraWallet.reconnectSession();
+
+      toast.info("Please approve the transaction in Pera Wallet...");
+
+      const signedTxn = await peraWallet.signTransaction([[{ txn }]]);
+
+      // Submit to network
+      const { txid } = await algodClient.sendRawTransaction(signedTxn[0]).do();
+
+      // Wait for confirmation
+      toast.loading("Waiting for confirmation...", { id: "tx-confirm" });
+      await algosdk.waitForConfirmation(algodClient, txid, 4);
+
+      toast.dismiss("tx-confirm");
+      toast.success(`Payment confirmed! TX: ${txid.substring(0, 8)}...`);
+      setTxId(txid);
+      setAmount("");
+      setReceiver("");
+    } catch (err: any) {
+      console.error("Transaction failed:", err);
+      toast.dismiss("tx-confirm");
+      if (err?.message?.includes("rejected")) {
+        toast.error("Transaction cancelled by user");
+      } else {
+        toast.error(`Transaction failed: ${err?.message || "Unknown error"}`);
+      }
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <h2 className="text-3xl font-black">Send ALGO</h2>
+      <div className="p-8 bg-white dark:bg-zinc-900 rounded-[2.5rem] border border-slate-100 dark:border-zinc-800 shadow-2xl space-y-8">
+        <div className="space-y-4">
+          <label className="text-xs font-black uppercase text-slate-400 tracking-widest px-1">
+            Amount
+          </label>
+          <div className="flex items-center justify-between border-b-4 border-slate-100 dark:border-zinc-800 pb-4">
+            <input
+              type="number"
+              placeholder="0.00"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className="bg-transparent text-5xl font-black outline-none w-full"
+              autoFocus
+              min="0"
+              step="0.1"
+            />
+            <span className="text-2xl font-black text-teal-600">ALGO</span>
+          </div>
+          <p className="text-xs text-slate-400 font-bold">
+            Balance: {balance !== null ? balance.toFixed(2) : "..."} ALGO
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-xs font-black uppercase text-slate-400 tracking-widest px-1">
+            Receiver
+          </label>
+          <input
+            type="text"
+            placeholder="Enter wallet address..."
+            value={receiver}
+            onChange={(e) => setReceiver(e.target.value)}
+            className="w-full p-5 rounded-3xl bg-slate-50 dark:bg-zinc-800 border-none outline-none focus:ring-4 focus:ring-teal-500/10 transition-all font-bold"
+          />
+        </div>
+
+        <button
+          onClick={handleSend}
+          disabled={isSending || !walletAddress}
+          className="w-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-black py-5 rounded-[2.5rem] shadow-xl hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isSending ? "Signing in Pera..." : "Confirm Transaction"}
+        </button>
+
+        {txId && (
+          <div className="p-4 rounded-2xl bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800">
+            <p className="text-xs font-bold text-teal-700 dark:text-teal-300">
+              Last TX:{" "}
+              <a
+                href={`https://testnet.explorer.perawallet.app/tx/${txId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline"
+              >
+                {txId.substring(0, 20)}...
+              </a>
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function App() {
   const [isStarted, setIsStarted] = useState(false);
@@ -93,54 +264,7 @@ export default function App() {
       case "fundraising":
         return <Fundraising />;
       case "pay":
-        return (
-          <div className="space-y-6">
-            <h2 className="text-3xl font-black">Send ALGO</h2>
-            <div className="p-8 bg-white dark:bg-zinc-900 rounded-[2.5rem] border border-slate-100 dark:border-zinc-800 shadow-2xl space-y-8">
-              <div className="space-y-4">
-                <label className="text-xs font-black uppercase text-slate-400 tracking-widest px-1">
-                  Amount
-                </label>
-                <div className="flex items-center justify-between border-b-4 border-slate-100 dark:border-zinc-800 pb-4">
-                  <input
-                    type="number"
-                    placeholder="0.00"
-                    className="bg-transparent text-5xl font-black outline-none w-full"
-                    autoFocus
-                  />
-                  <span className="text-2xl font-black text-teal-600">
-                    ALGO
-                  </span>
-                </div>
-                <p className="text-xs text-slate-400 font-bold">
-                  Balance: 10.50 ALGO
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-xs font-black uppercase text-slate-400 tracking-widest px-1">
-                  Receiver
-                </label>
-                <input
-                  type="text"
-                  placeholder="Enter wallet address or name..."
-                  className="w-full p-5 rounded-3xl bg-slate-50 dark:bg-zinc-800 border-none outline-none focus:ring-4 focus:ring-teal-500/10 transition-all font-bold"
-                />
-              </div>
-
-              <button
-                onClick={() =>
-                  toast.success(
-                    "Payment initiated on blockchain",
-                  )
-                }
-                className="w-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-black py-5 rounded-[2.5rem] shadow-xl hover:scale-[1.02] active:scale-95 transition-all"
-              >
-                Confirm Transaction
-              </button>
-            </div>
-          </div>
-        );
+        return <SendAlgoPage walletAddress={walletAddress} />;
       default:
         return (
           <Dashboard

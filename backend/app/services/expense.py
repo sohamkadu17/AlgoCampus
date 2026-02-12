@@ -33,7 +33,7 @@ class ExpenseService:
         self,
         group_id: int,
         payer_address: str,
-        payer_private_key: str,
+        payer_private_key: Optional[str],
         amount: int,
         description: str,
         split_with: List[str],
@@ -80,45 +80,63 @@ class ExpenseService:
                     "split_with must include the payer and at least one other member"
                 )
             
-            # Add expense on-chain
-            logger.info(
-                f"Adding expense: group_id={group.chain_group_id}, "
-                f"amount={amount}, split_with={len(split_with)} members"
-            )
+            # Add expense on-chain (only if private key is provided)
+            chain_expense_id = None
+            tx_id = None
+            confirmed_round = None
             
-            tx_result = await self.algo_service.add_expense(
-                payer_address=payer_address,
-                payer_private_key=payer_private_key,
-                group_id=group.chain_group_id,
-                amount=amount,
-                note=description,
-                split_with=split_with
-            )
+            if payer_private_key:
+                logger.info(
+                    f"Adding expense on-chain: group_id={group.chain_group_id}, "
+                    f"amount={amount}, split_with={len(split_with)} members"
+                )
+                
+                tx_result = await self.algo_service.add_expense(
+                    payer_address=payer_address,
+                    payer_private_key=payer_private_key,
+                    group_id=group.chain_group_id,
+                    amount=amount,
+                    note=description,
+                    split_with=split_with
+                )
+                
+                # Extract expense_id from logs
+                chain_expense_id = tx_result.decode_log(0)
+                tx_id = tx_result.tx_id
+                confirmed_round = tx_result.confirmed_round
+                
+                if not chain_expense_id:
+                    raise SmartContractError("Failed to extract expense_id from transaction")
+                
+                logger.info(
+                    f"Expense added on-chain: expense_id={chain_expense_id}, "
+                    f"tx_id={tx_result.tx_id}"
+                )
+            else:
+                logger.info(
+                    f"Adding expense off-chain (no private key): "
+                    f"group_id={group.chain_group_id}, amount={amount}"
+                )
+                # Use a simple incrementing ID for off-chain expenses
+                chain_expense_id = 0
             
-            # Extract expense_id from logs
-            chain_expense_id = tx_result.decode_log(0)
-            if not chain_expense_id:
-                raise SmartContractError("Failed to extract expense_id from transaction")
-            
-            logger.info(
-                f"Expense added on-chain: expense_id={chain_expense_id}, "
-                f"tx_id={tx_result.tx_id}"
-            )
-            
-            # Create transaction record
-            transaction = Transaction(
-                transaction_id=tx_result.tx_id,
-                block_number=tx_result.confirmed_round,
-                transaction_type="add_expense",
-                metadata={
-                    "expense_id": chain_expense_id,
-                    "group_id": group.chain_group_id,
-                    "amount": amount,
-                    "split_count": len(split_with)
-                }
-            )
-            self.db.add(transaction)
-            await self.db.flush()
+            # Create transaction record (if on-chain)
+            transaction_record_id = None
+            if tx_id:
+                transaction = Transaction(
+                    transaction_id=tx_id,
+                    block_number=confirmed_round,
+                    transaction_type="add_expense",
+                    metadata={
+                        "expense_id": chain_expense_id,
+                        "group_id": group.chain_group_id,
+                        "amount": amount,
+                        "split_count": len(split_with)
+                    }
+                )
+                self.db.add(transaction)
+                await self.db.flush()
+                transaction_record_id = transaction.id
             
             # Create expense record
             expense = Expense(
@@ -129,7 +147,7 @@ class ExpenseService:
                 payer_address=payer_address,
                 split_type=split_type,
                 settled=False,
-                transaction_id=transaction.id
+                transaction_id=transaction_record_id
             )
             self.db.add(expense)
             await self.db.flush()

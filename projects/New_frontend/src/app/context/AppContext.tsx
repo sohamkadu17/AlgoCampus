@@ -50,7 +50,7 @@ interface AppContextProviderProps {
 }
 
 export function AppContextProvider({ children }: AppContextProviderProps) {
-  const { isAuthenticated, getPrivateKey } = useWalletContext();
+  const { isAuthenticated } = useWalletContext();
 
   // State
   const [groups, setGroups] = useState<Group[]>([]);
@@ -102,14 +102,8 @@ export function AppContextProvider({ children }: AppContextProviderProps) {
   };
 
   const createGroup = async (name: string, description: string): Promise<Group | null> => {
-    const privateKey = getPrivateKey();
-    if (!privateKey) {
-      toast.error('Private key required to create group');
-      return null;
-    }
-
     try {
-      const response = await groupsService.createGroup({ name, description }, privateKey);
+      const response = await groupsService.createGroup({ name, description });
       if (response.data) {
         setGroups([...groups, response.data]);
         toast.success('Group created successfully!');
@@ -156,14 +150,8 @@ export function AppContextProvider({ children }: AppContextProviderProps) {
   };
 
   const addExpense = async (expenseData: any): Promise<Expense | null> => {
-    const privateKey = getPrivateKey();
-    if (!privateKey) {
-      toast.error('Private key required to add expense');
-      return null;
-    }
-
     try {
-      const response = await expensesService.createExpense(expenseData, privateKey);
+      const response = await expensesService.createExpense(expenseData);
       if (response.data) {
         setExpenses([response.data, ...expenses]);
         toast.success('Expense added successfully!');
@@ -205,14 +193,8 @@ export function AppContextProvider({ children }: AppContextProviderProps) {
   };
 
   const initiateSettlement = async (settlementData: any): Promise<Settlement | null> => {
-    const privateKey = getPrivateKey();
-    if (!privateKey) {
-      toast.error('Private key required to initiate settlement');
-      return null;
-    }
-
     try {
-      const response = await settlementsService.initiateSettlement(settlementData, privateKey);
+      const response = await settlementsService.initiateSettlement(settlementData);
       if (response.data) {
         setSettlements([response.data, ...settlements]);
         toast.success('Settlement initiated!');
@@ -230,14 +212,8 @@ export function AppContextProvider({ children }: AppContextProviderProps) {
   };
 
   const executeSettlement = async (settlementId: number): Promise<Settlement | null> => {
-    const privateKey = getPrivateKey();
-    if (!privateKey) {
-      toast.error('Private key required to execute settlement');
-      return null;
-    }
-
     try {
-      const response = await settlementsService.executeSettlement(settlementId, privateKey);
+      const response = await settlementsService.executeSettlement(settlementId);
       if (response.data) {
         // Update settlement in list
         setSettlements(settlements.map(s => 

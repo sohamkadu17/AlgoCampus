@@ -49,22 +49,22 @@ export const settlementsService = {
   /**
    * Initiate a settlement
    */
-  async initiateSettlement(settlementData: SettlementInitiate, privateKey: string) {
+  async initiateSettlement(settlementData: SettlementInitiate, privateKey?: string) {
     return apiClient.post<Settlement>(
       API_ENDPOINTS.SETTLEMENTS.INITIATE,
       settlementData,
-      { privateKey }
+      privateKey ? { privateKey } : {}
     );
   },
 
   /**
    * Execute a settlement (atomic transaction)
    */
-  async executeSettlement(settlementId: number, privateKey: string) {
+  async executeSettlement(settlementId: number, privateKey?: string) {
     return apiClient.post<Settlement>(
       API_ENDPOINTS.SETTLEMENTS.EXECUTE(settlementId),
       {},
-      { privateKey }
+      privateKey ? { privateKey } : {}
     );
   },
 

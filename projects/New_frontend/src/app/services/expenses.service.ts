@@ -55,11 +55,11 @@ export const expensesService = {
   /**
    * Create a new expense
    */
-  async createExpense(expenseData: ExpenseCreate, privateKey: string) {
+  async createExpense(expenseData: ExpenseCreate, privateKey?: string) {
     return apiClient.post<Expense>(
       API_ENDPOINTS.EXPENSES.CREATE,
       expenseData,
-      { privateKey }
+      privateKey ? { privateKey } : {}
     );
   },
 

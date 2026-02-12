@@ -39,7 +39,6 @@
     "@radix-ui/react-toggle": "1.1.2",
     "@radix-ui/react-toggle-group": "1.1.2",
     "@radix-ui/react-tooltip": "1.1.8",
-    "@txnlab/use-wallet": "^4.5.0",
     "algosdk": "^3.5.2",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",

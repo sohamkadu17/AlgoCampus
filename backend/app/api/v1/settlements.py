@@ -5,7 +5,7 @@ Execute and track debt settlements
 
 import logging
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from slowapi import Limiter
@@ -35,6 +35,7 @@ logger = logging.getLogger(__name__)
 @router.post("/initiate", response_model=Settlement)
 @limiter.limit("10/minute")
 async def initiate_settlement(
+    request: Request,
     settlement_data: SettlementInitiate,
     db: AsyncSession = Depends(get_db),
     user_address: str = Depends(get_current_user_address),
@@ -85,6 +86,7 @@ async def initiate_settlement(
 @router.post("/execute/{settlement_id}", response_model=Settlement)
 @limiter.limit("5/minute")
 async def execute_settlement(
+    request: Request,
     settlement_id: int,
     db: AsyncSession = Depends(get_db),
     user_address: str = Depends(get_current_user_address),

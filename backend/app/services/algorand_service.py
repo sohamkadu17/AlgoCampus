@@ -54,12 +54,12 @@ class AlgorandService:
     
     def __init__(self):
         self.algod_client = algod.AlgodClient(
-            settings.ALGOD_TOKEN,
-            settings.ALGOD_ADDRESS
+            settings.ALGORAND_ALGOD_TOKEN,
+            settings.ALGORAND_ALGOD_URL
         )
         self.indexer_client = indexer.IndexerClient(
-            settings.INDEXER_TOKEN,
-            settings.INDEXER_ADDRESS
+            settings.ALGORAND_INDEXER_TOKEN,
+            settings.ALGORAND_INDEXER_URL
         )
         
         self.group_manager_app_id = settings.GROUP_MANAGER_APP_ID

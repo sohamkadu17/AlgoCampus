@@ -4,7 +4,7 @@ Create and manage expense split groups
 """
 
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,6 +26,7 @@ limiter = Limiter(key_func=get_remote_address)
 @router.post("", response_model=Group, status_code=status.HTTP_201_CREATED)
 @limiter.limit("10/minute")
 async def create_group(
+    request: Request,
     group: GroupCreate,
     db: AsyncSession = Depends(get_db),
     user_address: str = Depends(get_current_user_address)
@@ -202,6 +203,7 @@ async def update_group(
 @router.post("/{group_id}/members", status_code=status.HTTP_201_CREATED)
 @limiter.limit("20/minute")
 async def add_member(
+    request: Request,
     group_id: int,
     member: GroupMemberAdd,
     db: AsyncSession = Depends(get_db),

@@ -68,7 +68,7 @@ export const expensesService = {
    */
   async listExpenses(
     groupId: number,
-    includeSett led: boolean = true,
+    includeSettled: boolean = true,
     page: number = 1,
     pageSize: number = 20
   ) {

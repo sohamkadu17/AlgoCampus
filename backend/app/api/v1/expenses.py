@@ -5,7 +5,7 @@ Track and manage group expenses
 
 import logging
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from slowapi import Limiter
@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 @router.post("", response_model=Expense)
 @limiter.limit("20/minute")
 async def create_expense(
+    request: Request,
     expense_data: ExpenseCreate,
     db: AsyncSession = Depends(get_db),
     user_address: str = Depends(get_current_user_address),

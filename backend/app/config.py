@@ -43,10 +43,10 @@ class Settings(BaseSettings):
     
     # Algorand Network Configuration
     ALGORAND_NETWORK: str = "testnet"  # testnet, mainnet, localnet
-    ALGOD_ADDRESS: str = "https://testnet-api.algonode.cloud"
-    ALGOD_TOKEN: str = ""  # Empty for public nodes
-    INDEXER_ADDRESS: str = "https://testnet-idx.algonode.cloud"
-    INDEXER_TOKEN: str = ""
+    ALGORAND_ALGOD_URL: str = "https://testnet-api.algonode.cloud"
+    ALGORAND_ALGOD_TOKEN: str = ""  # Empty for public nodes
+    ALGORAND_INDEXER_URL: str = "https://testnet-idx.algonode.cloud"
+    ALGORAND_INDEXER_TOKEN: str = ""
     
     # Smart Contract App IDs (deployed contracts)
     GROUP_MANAGER_APP_ID: int = 0  # Set after deployment

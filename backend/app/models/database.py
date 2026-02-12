@@ -131,7 +131,7 @@ class Transaction(Base):
     amount = Column(BigInteger)
     fee = Column(BigInteger)
     note = Column(Text)
-    metadata = Column(JSON)  # Store additional data
+    tx_metadata = Column(JSON)  # Store additional data (renamed from metadata to avoid SQLAlchemy conflict)
     indexed_at = Column(DateTime, default=datetime.utcnow)
 
 

@@ -25,6 +25,7 @@ export const API_ENDPOINTS = {
   AUTH: {
     CHALLENGE: '/api/v1/auth/challenge',
     VERIFY: '/api/v1/auth/verify',
+    DEMO: '/api/v1/auth/demo', // Demo auth without signature verification
     REFRESH: '/api/v1/auth/refresh',
     ME: '/api/v1/auth/me',
   },

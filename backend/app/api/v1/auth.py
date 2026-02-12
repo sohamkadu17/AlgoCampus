@@ -124,6 +124,32 @@ async def verify_signature(request: VerifyRequest):
     )
 
 
+@router.post("/demo", response_model=TokenResponse)
+async def demo_auth(request: ChallengeRequest):
+    """
+    Demo authentication endpoint - issues tokens without verification
+    FOR DEVELOPMENT/DEMO ONLY - DO NOT USE IN PRODUCTION
+    """
+    try:
+        # Validate Algorand address format
+        encoding.decode_address(request.wallet_address)
+    except (ValueError, WrongChecksumError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid Algorand address"
+        )
+    
+    # Generate tokens directly without signature verification
+    access_token = auth_service.create_access_token(request.wallet_address)
+    refresh_token = auth_service.create_refresh_token(request.wallet_address)
+    
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        expires_in=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60
+    )
+
+
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh_token(request: RefreshRequest):
     """

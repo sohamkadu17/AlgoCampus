@@ -4,7 +4,7 @@ Business logic for group operations
 """
 
 from typing import Optional
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from algosdk.v2client import algod
 from algosdk import transaction, account, encoding
@@ -40,10 +40,13 @@ class GroupService:
         3. Add creator as admin member
         """
         # TODO: Implement smart contract call
-        # For now, using mock chain_group_id
+        # For now, using auto-incremented chain_group_id
         # In production, this would call GroupManager.create_group()
         
-        chain_group_id = 1  # Replace with actual smart contract call
+        max_id_result = await self.db.execute(
+            select(func.coalesce(func.max(db_models.Group.chain_group_id), 0))
+        )
+        chain_group_id = max_id_result.scalar() + 1
         
         # Create database record
         group = db_models.Group(

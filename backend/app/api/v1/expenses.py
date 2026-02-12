@@ -25,6 +25,7 @@ from app.utils.errors import (
     ResourceNotFoundError,
     SmartContractError
 )
+from app.models.database import GroupMember
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
@@ -54,10 +55,17 @@ async def create_expense(
         expense_service = ExpenseService(db)
         
         # Determine split participants
-        if expense_data.split_type == "equal":
-            # User must provide split_with addresses in description or separately
-            # For now, we'll use all group members (implement logic to get members)
-            split_with = [user_address]  # TODO: Get from group members
+        if expense_data.split_type == "equal" or expense_data.split_type == "percentage" or not expense_data.splits:
+            # Fetch all group members for equal/percentage split
+            from sqlalchemy import select
+            member_result = await db.execute(
+                select(GroupMember.wallet_address).where(
+                    GroupMember.group_id == expense_data.group_id
+                )
+            )
+            split_with = [row[0] for row in member_result.fetchall()]
+            if not split_with:
+                split_with = [user_address]
         else:
             # Custom split - extract addresses from splits
             split_with = [split.wallet_address for split in expense_data.splits]
@@ -83,7 +91,8 @@ async def create_expense(
     except SmartContractError as e:
         raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
-        logger.error(f"Failed to create expense: {e}")
+        import traceback
+        logger.error(f"Failed to create expense: {e}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail="Failed to create expense")
 
 

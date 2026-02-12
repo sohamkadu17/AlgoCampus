@@ -6,7 +6,7 @@ import logging
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -117,8 +117,11 @@ class ExpenseService:
                     f"Adding expense off-chain (no private key): "
                     f"group_id={group.chain_group_id}, amount={amount}"
                 )
-                # Use a simple incrementing ID for off-chain expenses
-                chain_expense_id = 0
+                # Auto-increment chain_expense_id for off-chain expenses
+                max_id_result = await self.db.execute(
+                    select(func.coalesce(func.max(Expense.chain_expense_id), 0))
+                )
+                chain_expense_id = max_id_result.scalar() + 1
             
             # Create transaction record (if on-chain)
             transaction_record_id = None
@@ -145,7 +148,7 @@ class ExpenseService:
                 amount=amount,
                 description=description,
                 payer_address=payer_address,
-                split_type=split_type,
+                split_type=split_type.value if hasattr(split_type, 'value') else str(split_type),
                 settled=False,
                 transaction_id=transaction_record_id
             )

@@ -1,13 +1,18 @@
-import React from 'react'
-import ReactDOM from 'react-dom/client'
-import App from './App'
-import './styles/main.css'
-import ErrorBoundary from './components/ErrorBoundary'
 
-ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
-  <React.StrictMode>
+  import { createRoot } from "react-dom/client";
+  import App from "./app/App.tsx";
+  import { WalletContextProvider } from "./app/context/WalletContext.tsx";
+  import { AppContextProvider } from "./app/context/AppContext.tsx";
+  import { ErrorBoundary } from "./app/components/ErrorBoundary.tsx";
+  import "./styles/index.css";
+
+  createRoot(document.getElementById("root")!).render(
     <ErrorBoundary>
-      <App />
+      <WalletContextProvider>
+        <AppContextProvider>
+          <App/>
+        </AppContextProvider>
+      </WalletContextProvider>
     </ErrorBoundary>
-  </React.StrictMode>,
-)
+  );
+  

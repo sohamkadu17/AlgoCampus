@@ -18,6 +18,8 @@ interface AppContextType {
   fetchGroups: () => Promise<void>;
   selectGroup: (group: Group | null) => void;
   createGroup: (name: string, description: string) => Promise<Group | null>;
+  addMember: (groupId: number, memberAddress: string) => Promise<boolean>;
+  removeMember: (groupId: number, memberAddress: string) => Promise<boolean>;
 
   // Expenses
   expenses: Expense[];
@@ -118,6 +120,46 @@ export function AppContextProvider({ children }: AppContextProviderProps) {
       return null;
     }
     return null;
+  };
+
+  const addMember = async (groupId: number, memberAddress: string): Promise<boolean> => {
+    try {
+      const response = await groupsService.addMember(groupId, memberAddress);
+      if (response.error) {
+        toast.error(`Failed to add member: ${response.error}`);
+        return false;
+      }
+      toast.success('Member added successfully!');
+      // Refresh groups to update member list
+      await fetchGroups();
+      // Re-select to refresh details
+      if (selectedGroup && selectedGroup.id === groupId) {
+        const updated = groups.find(g => g.id === groupId);
+        if (updated) setSelectedGroup(updated);
+      }
+      return true;
+    } catch (error) {
+      console.error('Error adding member:', error);
+      toast.error('Failed to add member');
+      return false;
+    }
+  };
+
+  const removeMember = async (groupId: number, memberAddress: string): Promise<boolean> => {
+    try {
+      const response = await groupsService.removeMember(groupId, memberAddress);
+      if (response.error) {
+        toast.error(`Failed to remove member: ${response.error}`);
+        return false;
+      }
+      toast.success('Member removed');
+      await fetchGroups();
+      return true;
+    } catch (error) {
+      console.error('Error removing member:', error);
+      toast.error('Failed to remove member');
+      return false;
+    }
   };
 
   // Expenses methods
@@ -246,6 +288,8 @@ export function AppContextProvider({ children }: AppContextProviderProps) {
     fetchGroups,
     selectGroup,
     createGroup,
+    addMember,
+    removeMember,
 
     expenses,
     userBalance,

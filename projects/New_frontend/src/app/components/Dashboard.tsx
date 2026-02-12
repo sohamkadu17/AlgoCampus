@@ -36,8 +36,31 @@ export const Dashboard: React.FC<DashboardProps> = ({ onAction, walletAddress = 
   const [balance, setBalance] = useState<number>(0); // in ALGOs
   const [isLoadingBalance, setIsLoadingBalance] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+  const [onChainTxns, setOnChainTxns] = useState<any[]>([]);
 
   const { groups, expenses, settlements, isLoadingGroups } = useAppContext();
+
+  // Fetch real transactions from Algorand indexer
+  const fetchTransactions = useCallback(async () => {
+    if (!walletAddress) return;
+    try {
+      const indexerUrl = ALGORAND_CONFIG.INDEXER_SERVER || 'https://testnet-idx.algonode.cloud';
+      const response = await fetch(
+        `${indexerUrl}/v2/accounts/${walletAddress}/transactions?limit=20`,
+        {
+          headers: ALGORAND_CONFIG.INDEXER_TOKEN
+            ? { 'X-Indexer-API-Token': ALGORAND_CONFIG.INDEXER_TOKEN }
+            : {},
+        }
+      );
+      if (response.ok) {
+        const data = await response.json();
+        setOnChainTxns(data.transactions || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch transactions:', error);
+    }
+  }, [walletAddress]);
 
   // Fetch real balance from Algorand testnet
   const fetchBalance = useCallback(async () => {
@@ -65,14 +88,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ onAction, walletAddress = 
     }
   }, [walletAddress]);
 
-  // Auto-refresh balance every 15 seconds
+  // Auto-refresh balance and transactions
   useEffect(() => {
     fetchBalance();
-    const interval = setInterval(fetchBalance, 15000);
+    fetchTransactions();
+    const interval = setInterval(() => {
+      fetchBalance();
+      fetchTransactions();
+    }, 15000);
     return () => clearInterval(interval);
-  }, [fetchBalance]);
+  }, [fetchBalance, fetchTransactions]);
 
-  // Build spending chart data from real expenses (last 7 days)
+  // Build spending chart data from real on-chain transactions (last 7 days)
   const chartData = useMemo(() => {
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const now = new Date();
@@ -83,6 +110,19 @@ export const Dashboard: React.FC<DashboardProps> = ({ onAction, walletAddress = 
       date.setDate(date.getDate() - i);
       const dayName = days[date.getDay()];
 
+      // Use on-chain txns for chart data (payment transactions sent by this wallet)
+      const dayTxns = onChainTxns.filter((txn) => {
+        const txnTime = new Date(txn['round-time'] * 1000);
+        return (
+          txnTime.getDate() === date.getDate() &&
+          txnTime.getMonth() === date.getMonth() &&
+          txnTime.getFullYear() === date.getFullYear() &&
+          txn['tx-type'] === 'pay' &&
+          txn.sender === walletAddress
+        );
+      });
+
+      // Also check app-level expenses
       const dayExpenses = expenses.filter((exp) => {
         const expDate = new Date(exp.created_at);
         return (
@@ -92,12 +132,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ onAction, walletAddress = 
         );
       });
 
-      const total = dayExpenses.reduce((sum, exp) => sum + exp.amount / 1_000_000, 0);
+      const txnTotal = dayTxns.reduce((sum, txn) => sum + (txn['payment-transaction']?.amount || 0) / 1_000_000, 0);
+      const expTotal = dayExpenses.reduce((sum, exp) => sum + exp.amount / 1_000_000, 0);
+      const total = txnTotal + expTotal;
+
       weekData.push({ name: dayName, amount: parseFloat(total.toFixed(2)) });
     }
 
     return weekData;
-  }, [expenses]);
+  }, [expenses, onChainTxns, walletAddress]);
 
   // Calculate spending trend
   const spendingTrend = useMemo(() => {
@@ -107,7 +150,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onAction, walletAddress = 
     return `${thisWeek.toFixed(1)} ALGO this week`;
   }, [chartData]);
 
-  // Build recent activity from real settlements and expenses
+  // Build recent activity from real on-chain transactions, settlements, and expenses
   const recentActivity = useMemo(() => {
     type ActivityItem = {
       id: string;
@@ -119,6 +162,27 @@ export const Dashboard: React.FC<DashboardProps> = ({ onAction, walletAddress = 
     };
 
     const items: ActivityItem[] = [];
+
+    // Add on-chain payment transactions
+    onChainTxns
+      .filter((txn) => txn['tx-type'] === 'pay')
+      .slice(0, 10)
+      .forEach((txn) => {
+        const isSender = txn.sender === walletAddress;
+        const payTxn = txn['payment-transaction'];
+        if (!payTxn) return;
+        const algoAmount = (payTxn.amount / 1_000_000).toFixed(2);
+        const otherAddress = isSender ? payTxn.receiver : txn.sender;
+        
+        items.push({
+          id: `tx-${txn.id}`,
+          type: isSender ? 'sent' : 'received',
+          user: otherAddress,
+          amount: `${isSender ? '-' : '+'} ${algoAmount}`,
+          time: formatRelativeTime(new Date(txn['round-time'] * 1000).toISOString()),
+          status: 'completed',
+        });
+      });
 
     // Add settlements as activity
     settlements.slice(0, 5).forEach((s) => {
@@ -145,9 +209,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ onAction, walletAddress = 
       });
     });
 
-    // Sort by time (most recent first) and take top 5
-    return items.slice(0, 5);
-  }, [settlements, expenses, walletAddress]);
+    // Deduplicate by id, sort most recent first, take top 5
+    const seen = new Set<string>();
+    return items.filter((item) => {
+      if (seen.has(item.id)) return false;
+      seen.add(item.id);
+      return true;
+    }).slice(0, 5);
+  }, [settlements, expenses, walletAddress, onChainTxns]);
 
   // USD estimate (rough ALGO/USD rate)
   const usdEstimate = (balance * 0.18).toFixed(2); // ~$0.18 per ALGO

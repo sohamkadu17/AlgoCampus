@@ -13,18 +13,31 @@ import {
   QrCode,
   Share2,
   Trash2,
-  Loader2
+  Loader2,
+  UserPlus,
+  DollarSign
 } from 'lucide-react';
 import { GlassCard } from './GlassCard';
 import { UserAvatar, generateUsername } from './UserAvatar';
 import { QRCodeSVG } from 'qrcode.react';
 import { useAppContext } from '../context/AppContext';
+import { useWalletContext } from '../context/WalletContext';
 import { toast } from 'sonner';
 
 export const Splits: React.FC = () => {
   const [view, setView] = useState<'list' | 'create' | 'details'>('list');
   const [groupName, setGroupName] = useState('');
   const [groupDescription, setGroupDescription] = useState('');
+  const [newMemberAddress, setNewMemberAddress] = useState('');
+  const [memberAddresses, setMemberAddresses] = useState<string[]>([]);
+  const [isAddingMember, setIsAddingMember] = useState(false);
+  const [showAddExpense, setShowAddExpense] = useState(false);
+  const [expenseDescription, setExpenseDescription] = useState('');
+  const [expenseAmount, setExpenseAmount] = useState('');
+  const [expenseSplitType, setExpenseSplitType] = useState<'equal' | 'custom' | 'percentage'>('equal');
+  const [isSubmittingExpense, setIsSubmittingExpense] = useState(false);
+  
+  const { address } = useWalletContext();
   
   const {
     groups,
@@ -33,9 +46,12 @@ export const Splits: React.FC = () => {
     fetchGroups,
     selectGroup,
     createGroup,
+    addMember,
+    removeMember,
     expenses,
     userBalance,isLoadingExpenses,
     fetchExpenses,
+    addExpense,
   } = useAppContext();
 
   // Load groups on mount
@@ -51,9 +67,90 @@ export const Splits: React.FC = () => {
 
     const newGroup = await createGroup(groupName, groupDescription);
     if (newGroup) {
+      // Add members that were added during creation
+      for (const addr of memberAddresses) {
+        await addMember(newGroup.id, addr);
+      }
       setGroupName('');
       setGroupDescription('');
+      setMemberAddresses([]);
       setView('list');
+    }
+  };
+
+  const handleAddMemberToCreate = () => {
+    const addr = newMemberAddress.trim();
+    if (!addr) {
+      toast.error('Please enter a wallet address');
+      return;
+    }
+    if (addr.length < 50) {
+      toast.error('Invalid Algorand wallet address');
+      return;
+    }
+    if (memberAddresses.includes(addr)) {
+      toast.error('Member already added');
+      return;
+    }
+    if (addr === address) {
+      toast.error('You are automatically added as admin');
+      return;
+    }
+    setMemberAddresses([...memberAddresses, addr]);
+    setNewMemberAddress('');
+  };
+
+  const handleRemoveMemberFromCreate = (addr: string) => {
+    setMemberAddresses(memberAddresses.filter(m => m !== addr));
+  };
+
+  const handleAddMemberToGroup = async () => {
+    if (!selectedGroup || !newMemberAddress.trim()) return;
+    const addr = newMemberAddress.trim();
+    if (addr.length < 50) {
+      toast.error('Invalid Algorand wallet address');
+      return;
+    }
+    setIsAddingMember(true);
+    const success = await addMember(selectedGroup.id, addr);
+    if (success) {
+      setNewMemberAddress('');
+      // Refresh group details
+      await fetchGroups();
+      const updated = groups.find(g => g.id === selectedGroup.id);
+      if (updated) selectGroup(updated);
+    }
+    setIsAddingMember(false);
+  };
+
+  const handleAddExpense = async () => {
+    if (!selectedGroup) return;
+    if (!expenseDescription.trim()) {
+      toast.error('Please enter a description');
+      return;
+    }
+    const algoAmount = parseFloat(expenseAmount);
+    if (isNaN(algoAmount) || algoAmount <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+    const microAlgos = Math.round(algoAmount * 1_000_000);
+
+    setIsSubmittingExpense(true);
+    const result = await addExpense({
+      group_id: selectedGroup.id,
+      amount: microAlgos,
+      description: expenseDescription.trim(),
+      split_type: expenseSplitType,
+    });
+    setIsSubmittingExpense(false);
+
+    if (result) {
+      setExpenseDescription('');
+      setExpenseAmount('');
+      setShowAddExpense(false);
+      // Refresh expenses
+      fetchExpenses(selectedGroup.id);
     }
   };
 
@@ -215,6 +312,74 @@ export const Splits: React.FC = () => {
                 </p>
               </div>
 
+              {/* Add Members Section */}
+              <div className="space-y-4">
+                <label className="text-xs font-black uppercase text-slate-400 tracking-widest px-1">
+                  Add Members (Optional)
+                </label>
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    placeholder="Paste Algorand wallet address..." 
+                    value={newMemberAddress}
+                    onChange={(e) => setNewMemberAddress(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddMemberToCreate())}
+                    className="flex-1 p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800 outline-none focus:ring-4 focus:ring-teal-500/10 transition-all text-sm font-bold"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddMemberToCreate}
+                    disabled={!newMemberAddress.trim()}
+                    className="p-4 bg-teal-600 text-white rounded-2xl shadow-lg shadow-teal-500/20 hover:scale-105 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <UserPlus className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* You (admin) */}
+                {address && (
+                  <div className="flex items-center gap-3 p-3 rounded-xl bg-teal-500/5 border border-teal-500/10">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-teal-500 to-cyan-600 flex items-center justify-center text-white text-xs font-black">
+                      You
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-mono text-slate-600 dark:text-slate-400 truncate">{address}</p>
+                      <p className="text-[10px] font-black uppercase text-teal-600">Admin (auto-added)</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Added members list */}
+                {memberAddresses.map((addr, idx) => (
+                  <motion.div
+                    key={addr}
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800"
+                  >
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs font-black">
+                      {idx + 1}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-mono text-slate-600 dark:text-slate-400 truncate">{addr}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveMemberFromCreate(addr)}
+                      className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </motion.div>
+                ))}
+
+                {memberAddresses.length > 0 && (
+                  <p className="text-xs text-slate-400 font-bold px-1">
+                    {memberAddresses.length + 1} member{memberAddresses.length > 0 ? 's' : ''} total (including you)
+                  </p>
+                )}
+              </div>
+
               <button 
                 onClick={handleCreateGroup}
                 disabled={isLoadingGroups || !groupName.trim()}
@@ -283,16 +448,162 @@ export const Splits: React.FC = () => {
               </div>
             </div>
 
+            {/* Members Section */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between px-1">
+                <h3 className="font-black text-lg flex items-center gap-2">
+                  <Users className="w-5 h-5 text-indigo-600" /> Members
+                  {selectedGroup.members && (
+                    <span className="text-xs font-bold text-slate-400">({selectedGroup.members.length})</span>
+                  )}
+                </h3>
+              </div>
+
+              {/* Add Member Input */}
+              <div className="flex gap-2">
+                <input 
+                  type="text" 
+                  placeholder="Add member wallet address..." 
+                  value={newMemberAddress}
+                  onChange={(e) => setNewMemberAddress(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddMemberToGroup())}
+                  className="flex-1 p-3 rounded-xl bg-white dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800 outline-none focus:ring-2 focus:ring-teal-500/50 transition-all text-sm font-bold"
+                />
+                <button
+                  onClick={handleAddMemberToGroup}
+                  disabled={isAddingMember || !newMemberAddress.trim()}
+                  className="px-4 py-3 bg-teal-600 text-white rounded-xl shadow-lg shadow-teal-500/20 hover:scale-105 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 text-sm font-black"
+                >
+                  {isAddingMember ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <UserPlus className="w-4 h-4" />
+                  )}
+                  Add
+                </button>
+              </div>
+
+              {/* Members List */}
+              {selectedGroup.members && selectedGroup.members.length > 0 ? (
+                <div className="space-y-2">
+                  {selectedGroup.members.map((memberAddr: string, idx: number) => {
+                    const isAdmin = memberAddr === selectedGroup.admin_address;
+                    const isYou = memberAddr === address;
+                    return (
+                      <GlassCard key={memberAddr} className="p-3 flex items-center justify-between bg-white dark:bg-zinc-900 border-none shadow-sm">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-white text-xs font-black ${
+                            isAdmin ? 'bg-gradient-to-br from-amber-500 to-orange-600' : 'bg-gradient-to-br from-indigo-500 to-purple-600'
+                          }`}>
+                            {isYou ? 'You' : idx + 1}
+                          </div>
+                          <div>
+                            <p className="text-xs font-mono text-slate-700 dark:text-slate-300">
+                              {memberAddr.slice(0, 8)}...{memberAddr.slice(-6)}
+                            </p>
+                            <div className="flex gap-1 mt-0.5">
+                              {isAdmin && (
+                                <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600">Admin</span>
+                              )}
+                              {isYou && (
+                                <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-teal-500/10 text-teal-600">You</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </GlassCard>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-4 space-y-1">
+                  <Users className="w-8 h-8 mx-auto text-slate-300" />
+                  <p className="text-xs text-slate-400 font-bold">No other members yet</p>
+                </div>
+              )}
+            </div>
+
             <div className="space-y-4">
               <div className="flex items-center justify-between px-1">
                  <h3 className="font-black text-lg">Expenses</h3>
                  <button 
-                   onClick={() => toast.info('Add expense dialog coming soon!')}
-                   className="bg-teal-600/10 text-teal-600 p-2 rounded-xl"
+                   onClick={() => setShowAddExpense(!showAddExpense)}
+                   className={`p-2 rounded-xl transition-all ${
+                     showAddExpense ? 'bg-red-500/10 text-red-500 rotate-45' : 'bg-teal-600/10 text-teal-600'
+                   }`}
                  >
                    <Plus className="w-5 h-5" />
                  </button>
               </div>
+
+              {/* Add Expense Form */}
+              <AnimatePresence>
+                {showAddExpense && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="p-5 rounded-[1.5rem] bg-slate-50 dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800 space-y-4">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-1">Description</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Lunch at campus cafe"
+                          value={expenseDescription}
+                          onChange={(e) => setExpenseDescription(e.target.value)}
+                          className="w-full p-3 rounded-xl bg-white dark:bg-zinc-800 border border-slate-100 dark:border-zinc-700 outline-none focus:ring-2 focus:ring-teal-500/50 text-sm font-bold"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-1">Amount (ALGO)</label>
+                        <div className="relative">
+                          <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0.01"
+                            placeholder="0.00"
+                            value={expenseAmount}
+                            onChange={(e) => setExpenseAmount(e.target.value)}
+                            className="w-full p-3 pl-9 rounded-xl bg-white dark:bg-zinc-800 border border-slate-100 dark:border-zinc-700 outline-none focus:ring-2 focus:ring-teal-500/50 text-sm font-bold"
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-1">Split Type</label>
+                        <div className="flex gap-2">
+                          {(['equal', 'percentage', 'custom'] as const).map((type) => (
+                            <button
+                              key={type}
+                              onClick={() => setExpenseSplitType(type)}
+                              className={`flex-1 py-2 px-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
+                                expenseSplitType === type
+                                  ? 'bg-teal-600 text-white shadow-lg shadow-teal-500/20'
+                                  : 'bg-white dark:bg-zinc-800 text-slate-500 border border-slate-100 dark:border-zinc-700'
+                              }`}
+                            >
+                              {type}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <button
+                        onClick={handleAddExpense}
+                        disabled={isSubmittingExpense || !expenseDescription.trim() || !expenseAmount}
+                        className="w-full bg-teal-600 text-white font-black py-3 rounded-xl shadow-lg shadow-teal-500/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isSubmittingExpense ? (
+                          <><Loader2 className="w-4 h-4 animate-spin" /> Adding...</>
+                        ) : (
+                          <><CreditCard className="w-4 h-4" /> Add Expense</>
+                        )}
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
               
               {isLoadingExpenses ? (
                 <div className="flex items-center justify-center py-8">

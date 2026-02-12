@@ -25,20 +25,20 @@ limiter = Limiter(key_func=get_remote_address)
 async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
     # Startup
-    print("🚀 Starting AlgoCampus Backend...")
+    print("Starting AlgoCampus Backend...")
     
     # Create database tables
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     
-    print("✅ Database initialized")
-    print(f"📡 Algorand Network: {settings.ALGORAND_NETWORK}")
-    print(f"🔗 Indexer URL: {settings.ALGORAND_INDEXER_URL}")
+    print("Database initialized")
+    print(f"Algorand Network: {settings.ALGORAND_NETWORK}")
+    print(f"Indexer URL: {settings.ALGORAND_INDEXER_URL}")
     
     yield
     
     # Shutdown
-    print("👋 Shutting down AlgoCampus Backend...")
+    print("Shutting down AlgoCampus Backend...")
 
 
 # Create FastAPI app

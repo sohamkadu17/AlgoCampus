@@ -51,13 +51,13 @@ class GroupMember(Base):
     
     id = Column(Integer, primary_key=True)
     group_id = Column(Integer, ForeignKey("groups.id"), nullable=False)
-    wallet_address = Column(String(58), nullable=False, index=True)
+    wallet_address = Column(String(58), ForeignKey("users.wallet_address"), nullable=False, index=True)
     joined_at = Column(DateTime, default=datetime.utcnow)
     role = Column(String(20), default="member")  # admin, member
     
     # Relationships
     group = relationship("Group", back_populates="members")
-    user = relationship("User", back_populates="groups")
+    user = relationship("User", back_populates="groups", foreign_keys=[wallet_address])
     
     # Constraints
     __table_args__ = (

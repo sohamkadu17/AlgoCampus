@@ -218,13 +218,13 @@ export default function App() {
 
   const handleConnect = async (type: string) => {
     setIsWalletModalOpen(false);
-    setJustConnected(true);
 
     try {
       await connectWallet(type);
       setIsStarted(true);
 
-      // Show success animation
+      // Show success animation AFTER connection succeeds
+      setJustConnected(true);
       setTimeout(() => {
         setJustConnected(false);
       }, 1500);
